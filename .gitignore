@@ -1,0 +1,7 @@
+gnu-efi/
+iso/
+build/
+mkgpt/
+.vscode/settings.json
+*.o
+*.so
