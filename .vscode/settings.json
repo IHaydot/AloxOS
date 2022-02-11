@@ -1,5 +1,6 @@
 {
     "files.associations": {
-        "writer.h": "c"
+        "writer.h": "c",
+        "efi.h": "c"
     }
 }

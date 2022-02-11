@@ -13,7 +13,9 @@ os-image.iso: hexaos-amd64.efi
 	parted uefi.img -s -a minimal toggle 1 boot
 	dd if=/dev/zero of=part.img bs=512 count=91669
 	mformat -i part.img -h 32 -t 32 -n 64 -c 1
+	mcopy -i part.img startup.nsh ::
 	mcopy -i part.img hexaos-amd64.efi ::
+	mcopy -i part.img Resources/zap-light16.psf :: 
 	dd if=part.img of=uefi.img bs=512 count=91669 seek=2048 conv=notrunc
 run: os-image.iso
-	qemu-system-x86_64 -cpu qemu64 -bios /usr/share/ovmf/OVMF.fd -drive file=uefi.img,if=ide -net none
+	qemu-system-x86_64 -cpu qemu64 -bios /usr/share/ovmf/OVMF.fd -drive format=raw,file=uefi.img,if=ide -net none
