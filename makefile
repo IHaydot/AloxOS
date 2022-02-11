@@ -1,21 +1,19 @@
-C_SOURCE_FILES = $(wildcard kernel/writer/*.c kernel/*.c)
-C_OBJ = ${C_SOURCE_FILES:.c=.o} 
+C_SOURCES = $(wildcard kernel/*.c kernel/writer/*.c)
+C_OBJ = ${C_SOURCES:.c=.o}
+
 %.o: %.c
-	x86_64-elf-gcc -Ignu-efi/inc -fpic -ffreestanding -fno-stack-protector -fno-stack-check -fshort-wchar -mno-red-zone -maccumulate-outgoing-args -c $< -o $@
-HEXAOS-AMD64.EFI: kernel/kernel.c $(C_OBJ)
-	x86_64-elf-ld -shared -Bsymbolic -Lgnu-efi -Tgnu-efi/gnuefi/elf_x86_64_efi.lds crt0-efi-x86_64.o kernel/kernel.o $(C_OBJ) -o build/kernel.so -lgnuefi -lefi
-	objcopy -j .text -j .sdata -j .data -j .dynamic -j .dynsym  -j .rel -j .rela -j .rel.* -j .rela.* -j .reloc --target efi-app-x86_64 --subsystem=10 build/kernel.so HEXAOS-AMD64.EFI
-os-image.iso: HEXAOS-AMD64.EFI
-	dd if=/dev/zero of=fat.img bs=1k count=1440
-	mformat -i fat.img -f 1440 ::
-	mmd -i fat.img ::/EFI
-	mmd -i fat.img ::/EFI/BOOT
-	mcopy -i fat.img HEXAOS-AMD64.EFI ::/EFI/BOOT
-	cp fat.img iso
-	xorriso -as mkisofs -R -f -e fat.img -no-emul-boot -o os-image.iso iso
+	x86_64-elf-gcc $< -c -fno-stack-protector -fpic -fshort-wchar -mno-red-zone -I gnu-efi/inc -I gnu-efi/inc/x86_64 -DEFI_FUNCTION_WRAPPER -ffreestanding -o $@
+hexaos-amd64.efi: $(C_OBJ)
+	x86_64-elf-ld $(C_OBJ) gnu-efi/x86_64/gnuefi/crt0-efi-x86_64.o -nostdlib -znocombreloc -T gnu-efi/gnuefi/elf_x86_64_efi.lds -shared -Bsymbolic -L /usr/lib -l:libgnuefi.a -l:libefi.a -o kernel.so
+	objcopy -j .text -j .sdata -j .data -j .dynamic -j .dynsym -j .rel -j .rela -j .reloc --target=efi-app-x86_64 kernel.so hexaos-amd64.efi 
+os-image.iso: hexaos-amd64.efi
+	dd if=/dev/zero of=uefi.img bs=512 count=93750
+	parted uefi.img -s -a minimal mklabel gpt
+	parted uefi.img -s -a minimal mkpart EFI FAT16 2048s 93716s
+	parted uefi.img -s -a minimal toggle 1 boot
+	dd if=/dev/zero of=part.img bs=512 count=91669
+	mformat -i part.img -h 32 -t 32 -n 64 -c 1
+	mcopy -i part.img hexaos-amd64.efi ::
+	dd if=part.img of=uefi.img bs=512 count=91669 seek=2048 conv=notrunc
 run: os-image.iso
-	@echo "Success!"
-	qemu-system-x86_64 -L /usr/share/qemu/ -pflash /usr/share/qemu/OVMF.fd -cdrom $< -net none
-  
-  
-  
+	qemu-system-x86_64 -cpu qemu64 -bios /usr/share/ovmf/OVMF.fd -drive file=uefi.img,if=ide -net none
